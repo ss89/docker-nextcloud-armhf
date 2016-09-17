@@ -1,0 +1,90 @@
+server {
+	listen 80 default_server;
+	listen [::]:80 default_server;
+
+	root /var/www/html;
+	server_name _;
+
+	add_header X-Content-Type-Options nosniff;
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-XSS-Protection "1; mode=block";
+    add_header X-Robots-Tag none;
+    add_header X-Download-Options noopen;
+    add_header X-Permitted-Cross-Domain-Policies none;
+
+    access_log  /var/log/nginx/nextcloud.access.log;
+    error_log   /var/log/nginx/nextcloud.error.log;
+
+    location = /robots.txt {
+        allow all;
+        log_not_found off;
+        access_log off;
+    }
+
+    location = /nextcloud/.well-known/carddav { 
+        return 301 $scheme://$host/nextcloud/remote.php/dav; 
+    }
+    location = /nextcloud/.well-known/caldav { 
+        return 301 $scheme://$host/nextcloud/remote.php/dav; 
+    }
+
+    client_max_body_size 512M;
+    fastcgi_buffers 64 4K;
+    gzip off;
+
+    error_page 403 /nextcloud/core/templates/403.php;
+    error_page 404 /nextcloud/core/templates/404.php;
+
+    location / {
+        rewrite ^ /nextcloud/index.php$uri;
+    }
+
+    location ~ ^/nextcloud/(?:build|tests|config|lib|3rdparty|templates|data)/ {
+        deny all;
+    }
+
+    location ~ ^/nextcloud/(?:\.|autotest|occ|issue|indie|db_|console) {
+        deny all;
+    }
+
+    location ~^/nextcloud/(?:index|remote|public|cron|core/ajax/update|status|ocs/v[12]|updater/.+|ocs-provider/.+|core/templates/40[34])\.php(?:$|/) {
+        include fastcgi_params;
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+        fastcgi_param HTTPS on;
+        #Avoid sending the security headers twice
+        fastcgi_param modHeadersAvailable true;
+        fastcgi_param front_controller_active true;
+        fastcgi_pass unix:/var/run/php/php7.0-fpm.sock;
+        fastcgi_intercept_errors on;
+        fastcgi_request_buffering off;
+    }
+
+    location ~ ^/nextcloud/(?:updater|ocs-provider)(?:$|/) {
+        try_files $uri/ =404;
+        index /nextcloud/index.php;
+    }
+
+    location ~* \.(?:css|js)$ {
+        try_files $uri /nextcloud/index.php$uri$is_args$args;
+        add_header Cache-Control "public, max-age=7200";
+        add_header X-Content-Type-Options nosniff;
+        add_header X-Frame-Options "SAMEORIGIN";
+        add_header X-XSS-Protection "1; mode=block";
+        add_header X-Robots-Tag none;
+        add_header X-Download-Options noopen;
+        add_header X-Permitted-Cross-Domain-Policies none;
+        # Optional: Don't log access to assets
+        access_log off;
+    }
+
+    location ~* \.(?:svg|gif|png|html|ttf|woff|ico|jpg|jpeg)$ {
+        try_files $uri /nextcloud/index.php$uri$is_args$args;
+        access_log off;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+}
